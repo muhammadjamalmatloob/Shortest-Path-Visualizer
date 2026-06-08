@@ -166,10 +166,22 @@ def bellman_ford_with_steps(graph, start, end):
 
 
 # ---------------------------------------------------------------------------
-# Floyd-Warshall
+# Floyd-Warshall  (all-pairs shortest paths)
 # ---------------------------------------------------------------------------
 
 def floyd_warshall_with_steps(graph, start, end):
+    """
+    Computes ALL-PAIRS shortest paths.
+
+    Extra field in every step dict:
+        matrix_snapshot – list of dicts, one per source node:
+            {
+              "src":  node label,
+              "row":  {dest_node: cost_or_'INF'},
+            }
+        nodes           – ordered list of node labels (column headers)
+        updated_cell    – (i, j) indices that changed in this step, or None
+    """
     steps = []
     nodes = sorted(list(graph.nodes()))
     idx = {n: i for i, n in enumerate(nodes)}
@@ -187,14 +199,31 @@ def floyd_warshall_with_steps(graph, start, end):
             dist[i][j] = w
             prev[i][j] = u
 
-    def snap():
+    def matrix_snap():
+        """Full N×N snapshot: list of {src, row{dest: val}}."""
+        return [
+            {
+                "src": nodes[i],
+                "row": {
+                    nodes[j]: (dist[i][j] if dist[i][j] != INF else 'INF')
+                    for j in range(n)
+                },
+            }
+            for i in range(n)
+        ]
+
+    def src_snap():
+        """Single-row snapshot for the chosen start node (used by graph panel)."""
         si = idx[start]
-        return {nodes[i]: (dist[si][i] if dist[si][i] != INF else 'INF') for i in range(n)}
+        return {nodes[j]: (dist[si][j] if dist[si][j] != INF else 'INF') for j in range(n)}
 
     steps.append({
         "type": "init",
-        "message": "Initialize distance matrix with direct edge weights",
-        "dist_snapshot": snap(),
+        "message": "Initialize distance matrix with direct edge weights (0 on diagonal, edge weights for direct edges, INF elsewhere)",
+        "dist_snapshot": src_snap(),
+        "matrix_snapshot": matrix_snap(),
+        "nodes": list(nodes),
+        "updated_cell": None,
         "relaxed_edges": [],
         "visited": set(),
     })
@@ -209,44 +238,85 @@ def floyd_warshall_with_steps(graph, start, end):
                         dist[i][j] = dist[i][k] + dist[k][j]
                         prev[i][j] = prev[k][j]
                         vi, vj = nodes[i], nodes[j]
-                        relaxed = [(vi, vj)] if i == idx[start] else []
+                        # Highlight the edge on the graph only when it involves
+                        # the chosen source or target so the visualisation stays useful
+                        relaxed = [(vi, vj)] if (i == idx[start] or j == idx[end]) else []
                         steps.append({
                             "type": "relax",
                             "edge": (vi, vj),
                             "message": (
-                                f"Via {vk}: dist[{vi}][{vj}] updated "
-                                f"{('INF' if old == INF else old)} -> {dist[i][j]}"
+                                f"Intermediate {vk}: dist[{vi}][{vj}] "
+                                f"{('INF' if old == INF else old)} → {dist[i][j]}"
+                                f"  (via {vi} → {vk} → {vj})"
                             ),
-                            "dist_snapshot": snap(),
+                            "dist_snapshot": src_snap(),
+                            "matrix_snapshot": matrix_snap(),
+                            "nodes": list(nodes),
+                            "updated_cell": (i, j),
                             "relaxed_edges": relaxed,
                             "visited": set(),
                         })
 
-    si, ei = idx.get(start), idx.get(end)
-    if si is None or ei is None or dist[si][ei] == INF:
-        return None, "No path exists", steps
+    # Check for negative-weight cycles (dist[i][i] < 0)
+    for i in range(n):
+        if dist[i][i] < 0:
+            steps.append({
+                "type": "final",
+                "message": f"Negative weight cycle detected through node {nodes[i]}!",
+                "dist_snapshot": src_snap(),
+                "matrix_snapshot": matrix_snap(),
+                "nodes": list(nodes),
+                "updated_cell": None,
+                "relaxed_edges": [],
+                "visited": set(),
+            })
+            return None, "Negative weight cycle detected!", steps
 
-    # Reconstruct path from prev matrix
-    path = [end]
-    cur = end
-    while cur != start:
-        ci = idx[cur]
-        p = prev[si][ci]
-        if p is None:
-            return None, "No path exists", steps
-        path.append(p)
-        cur = p
-    path.reverse()
+    # Build the all-pairs result summary for the final step message
+    reachable_pairs = [
+        (nodes[i], nodes[j], dist[i][j])
+        for i in range(n) for j in range(n)
+        if i != j and dist[i][j] != INF
+    ]
+    summary = f"All-pairs shortest paths computed. {len(reachable_pairs)} reachable pair(s)."
+
+    # Reconstruct the highlighted path from start → end if reachable
+    si, ei = idx.get(start), idx.get(end)
+    path = None
+    if si is not None and ei is not None and dist[si][ei] != INF:
+        path = [end]
+        cur = end
+        while cur != start:
+            ci = idx[cur]
+            p = prev[si][ci]
+            if p is None:
+                path = None
+                break
+            path.append(p)
+            cur = p
+        if path:
+            path.reverse()
+
+    cost = dist[si][ei] if (si is not None and ei is not None and dist[si][ei] != INF) else "No path"
+    path_msg = (
+        f"  |  Highlighted: {start} → {end} = {cost}"
+        if path else
+        f"  |  No path from {start} to {end}"
+    )
 
     steps.append({
         "type": "final",
-        "message": f"Shortest path found: {' -> '.join(path)}  |  Total cost = {dist[si][ei]}",
-        "dist_snapshot": snap(),
+        "message": summary + path_msg,
+        "dist_snapshot": src_snap(),
+        "matrix_snapshot": matrix_snap(),
+        "nodes": list(nodes),
+        "updated_cell": None,
         "relaxed_edges": [],
-        "path": path,
+        "path": path or [],
         "visited": set(),
     })
-    return path, dist[si][ei], steps
+
+    return path, cost, steps
 
 
 # ---------------------------------------------------------------------------

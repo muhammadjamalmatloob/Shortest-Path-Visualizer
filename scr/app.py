@@ -214,18 +214,103 @@ with right_col:
         </div>
         """, unsafe_allow_html=True)
 
-        # Distance table
-        dist_snap = step.get("dist_snapshot", {})
-        if dist_snap:
-            st.markdown("**Distance table at this step:**")
-            prev_snap  = steps[cur_idx - 1].get("dist_snapshot", {}) if cur_idx > 0 else {}
-            cells_html = ""
-            for node, val in sorted(dist_snap.items()):
-                prev_val      = prev_snap.get(node)
-                updated_class = "updated" if prev_val is not None and prev_val != val else ""
-                display_val   = str(val) if val != float('inf') else "INF"
-                cells_html   += f'<div class="dist-cell {updated_class}">{node}: {display_val}</div>'
-            st.markdown(f'<div class="dist-table">{cells_html}</div>', unsafe_allow_html=True)
+        # Distance table — full matrix for Floyd-Warshall, single-row for others
+        is_fw = st.session_state.get("algo") == "Floyd-Warshall"
+
+        if is_fw:
+            matrix    = step.get("matrix_snapshot", [])
+            col_nodes = step.get("nodes", [])
+            updated_cell = step.get("updated_cell")   # (row_i, col_j) or None
+            prev_matrix  = steps[cur_idx - 1].get("matrix_snapshot", []) if cur_idx > 0 else []
+
+            if matrix and col_nodes:
+                st.markdown("**All-pairs distance matrix at this step:**")
+
+                # Build an HTML table
+                header_cells = "".join(
+                    f'<th style="padding:5px 10px;text-align:center;'
+                    f'font-family:var(--font-mono,monospace);font-size:0.72rem;'
+                    f'color:#a89cc8;border-bottom:1px solid rgba(155,93,229,0.25);">{c}</th>'
+                    for c in col_nodes
+                )
+                header_row = (
+                    f'<tr><th style="padding:5px 10px;font-family:var(--font-mono,monospace);'
+                    f'font-size:0.72rem;color:#a89cc8;border-bottom:1px solid rgba(155,93,229,0.25);">src \\ dst</th>'
+                    f'{header_cells}</tr>'
+                )
+
+                body_rows = ""
+                for ri, row_info in enumerate(matrix):
+                    src = row_info["src"]
+                    prev_row = prev_matrix[ri]["row"] if prev_matrix and ri < len(prev_matrix) else {}
+                    row_html = ""
+                    for ci, col in enumerate(col_nodes):
+                        val = row_info["row"].get(col, "INF")
+                        prev_val = prev_row.get(col)
+                        is_updated = (
+                            updated_cell is not None
+                            and updated_cell == (ri, ci)
+                        )
+                        is_changed = (
+                            not is_updated
+                            and prev_val is not None
+                            and prev_val != val
+                        )
+                        if is_updated:
+                            cell_bg    = "rgba(11,240,168,0.18)"
+                            cell_color = "#0bf0a8"
+                            cell_border = "1px solid rgba(11,240,168,0.55)"
+                            cell_fw = "800"
+                        elif is_changed:
+                            cell_bg    = "rgba(155,93,229,0.12)"
+                            cell_color = "#c77dff"
+                            cell_border = "1px solid rgba(155,93,229,0.30)"
+                            cell_fw = "700"
+                        else:
+                            cell_bg    = "transparent"
+                            cell_color = "#f2eeff"
+                            cell_border = "1px solid rgba(155,93,229,0.10)"
+                            cell_fw = "400"
+
+                        display = str(val)
+                        row_html += (
+                            f'<td style="padding:5px 10px;text-align:center;'
+                            f'font-family:var(--font-mono,monospace);font-size:0.75rem;'
+                            f'background:{cell_bg};color:{cell_color};'
+                            f'border:{cell_border};border-radius:4px;'
+                            f'font-weight:{cell_fw};">{display}</td>'
+                        )
+                    body_rows += (
+                        f'<tr><td style="padding:5px 10px;font-family:var(--font-mono,monospace);'
+                        f'font-size:0.75rem;font-weight:700;color:#9b5de5;'
+                        f'border-right:1px solid rgba(155,93,229,0.25);">{src}</td>'
+                        f'{row_html}</tr>'
+                    )
+
+                table_html = (
+                    f'<div style="overflow-x:auto;margin:10px 0;">'
+                    f'<table style="border-collapse:separate;border-spacing:3px;width:100%;">'
+                    f'<thead>{header_row}</thead>'
+                    f'<tbody>{body_rows}</tbody>'
+                    f'</table>'
+                    f'<div style="font-family:var(--font-mono,monospace);font-size:0.68rem;'
+                    f'color:#5c5178;margin-top:6px;">'
+                    f'&#9646; green cell = updated this step &nbsp;|&nbsp; purple = changed earlier</div>'
+                    f'</div>'
+                )
+                st.markdown(table_html, unsafe_allow_html=True)
+        else:
+            dist_snap = step.get("dist_snapshot", {})
+            if dist_snap:
+                st.markdown("**Distance table at this step:**")
+                prev_snap  = steps[cur_idx - 1].get("dist_snapshot", {}) if cur_idx > 0 else {}
+                cells_html = ""
+                for node, val in sorted(dist_snap.items()):
+                    prev_val      = prev_snap.get(node)
+                    updated_class = "updated" if prev_val is not None and prev_val != val else ""
+                    display_val   = str(val) if val != float('inf') else "INF"
+                    cells_html   += f'<div class="dist-cell {updated_class}">{node}: {display_val}</div>'
+                st.markdown(f'<div class="dist-table">{cells_html}</div>', unsafe_allow_html=True)
 
         # Final path highlight
         if step_type == "final" and step.get("path"):

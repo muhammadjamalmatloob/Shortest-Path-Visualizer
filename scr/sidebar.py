@@ -123,6 +123,13 @@ def _section_algorithm(G: nx.DiGraph) -> None:
         key="algo",
     )
 
+    if selected_algo == "Floyd-Warshall":
+        st.info(
+            "Floyd-Warshall computes **all-pairs** shortest paths. "
+            "Source & target are used only to highlight one path on the graph.",
+            icon="ℹ️",
+        )
+
     if st.button("Run Algorithm", use_container_width=True, type="primary"):
         if source_node and target_node and source_node != target_node:
             algo_map = {
