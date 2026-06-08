@@ -103,12 +103,12 @@ elif steps and cur_idx >= len(steps):
 with left_col:
     if len(G.nodes) == 0:
         st.markdown("""
-        <div style="background:white; border-radius:16px; padding:60px 40px; text-align:center;
-                    box-shadow:0 2px 16px rgba(0,0,0,0.07); color:#7c3aed;">
-            <div style="font-size:2.5rem; font-weight:800; font-family:'DM Sans',sans-serif;">
+        <div style="background:#1a1535; border-radius:16px; padding:60px 40px; text-align:center;
+                    box-shadow:0 2px 16px rgba(0,0,0,0.4); color:#7c3aed; border:1px solid #2d2060;">
+            <div style="font-size:2.5rem; font-weight:800; font-family:'DM Sans',sans-serif; color:#c4b5fd;">
                 Empty Graph
             </div>
-            <div style="font-size:1rem; color:#64748b; margin-top:12px; font-family:'Space Mono',monospace;">
+            <div style="font-size:1rem; color:#7c6aaa; margin-top:12px; font-family:'Space Mono',monospace;">
                 Add edges from the sidebar to get started.
             </div>
         </div>
@@ -121,6 +121,7 @@ with left_col:
                 visited_nodes  = current_visited,
                 final_path     = current_final_path,
                 positions      = st.session_state.node_positions or None,
+                undirected_edges = st.session_state.get("undirected_edges", set()),
             )
             if positions:
                 st.session_state.node_positions = positions

@@ -34,17 +34,19 @@ def render_graph(
     visited_nodes=None,
     final_path=None,
     positions=None,
+    undirected_edges=None,
 ):
     """
     Build a Pyvis HTML visualisation of *graph*.
 
     Parameters
     ----------
-    graph         : nx.DiGraph
-    relaxed_edges : list of (u, v) – edges to colour green this step
-    visited_nodes : set of node labels – nodes to colour amber
-    final_path    : list of node labels in order – nodes/edges coloured purple
-    positions     : dict {node: (x, y)} – reuse stable layout across steps
+    graph            : nx.DiGraph
+    relaxed_edges    : list of (u, v) – edges to colour green this step
+    visited_nodes    : set of node labels – nodes to colour amber
+    final_path       : list of node labels in order – nodes/edges coloured purple
+    positions        : dict {node: (x, y)} – reuse stable layout across steps
+    undirected_edges : set of frozensets – edge pairs to render without arrowheads
 
     Returns
     -------
@@ -56,6 +58,8 @@ def render_graph(
         visited_nodes = set()
     if final_path is None:
         final_path = []
+    if undirected_edges is None:
+        undirected_edges = set()
 
     # Build the set of edges that belong to the final path
     path_edge_set = set()
@@ -73,8 +77,8 @@ def render_graph(
     net = Network(
         height="520px",
         width="100%",
-        bgcolor="#ffffff",
-        font_color="#1a0533",
+        bgcolor="#12102a",
+        font_color="#e2e8f0",
         directed=True,
     )
 
@@ -103,7 +107,18 @@ def render_graph(
 
     # --- Edges ---
     relaxed_set = {tuple(e) for e in relaxed_edges}
+    rendered_undirected = set()   # track frozensets already drawn as undirected
+
     for u, v, data in graph.edges(data=True):
+        edge_pair = frozenset({u, v})
+        is_undirected = edge_pair in undirected_edges
+
+        # For undirected pairs, only render once (skip the reverse duplicate)
+        if is_undirected:
+            if edge_pair in rendered_undirected:
+                continue
+            rendered_undirected.add(edge_pair)
+
         weight = data.get("weight", 1)
         is_relaxed = (u, v) in relaxed_set
         is_path    = (u, v) in path_edge_set
@@ -113,14 +128,20 @@ def render_graph(
         else:
             color, width = _COLOR_DEFAULT_EDGE, 1.5
 
+        arrows_config = (
+            {"to": {"enabled": False}, "from": {"enabled": False}}
+            if is_undirected
+            else {"to": {"enabled": True, "scaleFactor": 0.8}}
+        )
+
         net.add_edge(
             u, v,
             title=f"Weight: {weight}",
             label=str(weight),
             color=color,
             width=width,
-            font={"size": 12, "color": "#475569"},
-            arrows={"to": {"enabled": True, "scaleFactor": 0.8}},
+            font={"size": 20, "color": "#c77dff", "bold": True, "strokeWidth": 3, "strokeColor": "#06040f"},
+            arrows=arrows_config,
         )
 
     net.set_options(json.dumps({

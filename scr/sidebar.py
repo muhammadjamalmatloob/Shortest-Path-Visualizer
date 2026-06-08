@@ -37,6 +37,10 @@ def render_sidebar(G: nx.DiGraph) -> None:
 def _section_add_edge(G: nx.DiGraph) -> None:
     st.markdown('<div class="section-head">Add / Update Edge</div>', unsafe_allow_html=True)
 
+    # Initialise undirected-edge tracker in session state
+    if "undirected_edges" not in st.session_state:
+        st.session_state.undirected_edges = set()
+
     c1, c2 = st.columns(2)
     with c1:
         node_from = st.text_input("From", value="", placeholder="A", key="from_node").strip().upper()
@@ -50,7 +54,13 @@ def _section_add_edge(G: nx.DiGraph) -> None:
         if node_from and node_to and node_from != node_to:
             G.add_edge(node_from, node_to, weight=edge_weight)
             if not directed_edge:
+                # Add reverse edge so both directions work for algorithms
                 G.add_edge(node_to, node_from, weight=edge_weight)
+                # Track this pair as undirected for rendering (store as frozenset)
+                st.session_state.undirected_edges.add(frozenset({node_from, node_to}))
+            else:
+                # If re-adding as directed, remove from undirected set if present
+                st.session_state.undirected_edges.discard(frozenset({node_from, node_to}))
             _reset_run_state()
             st.rerun()
         else:
@@ -138,6 +148,7 @@ def _section_algorithm(G: nx.DiGraph) -> None:
         st.session_state.path_result      = None
         st.session_state.current_step     = 0
         st.session_state.node_positions   = {}
+        st.session_state.undirected_edges = set()
         st.rerun()
 
 
